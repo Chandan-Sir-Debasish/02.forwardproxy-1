@@ -1,0 +1,44 @@
+services:
+  mongodb:
+    image: mongo:6
+    container_name: proxy-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - proxy-net
+
+  proxy-server:
+    build: ./backend
+    container_name: proxy-server
+    restart: unless-stopped
+    ports:
+      - "8888:8888" # Forward proxy port
+      - "5000:5000" # API port
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/proxyDB
+      - PROXY_PORT=8888
+      - PORT=5000
+      - BLOCKLIST_ENABLED=true
+    depends_on:
+      - mongodb
+    networks:
+      - proxy-net
+
+  frontend:
+    build: ./frontend
+    container_name: proxy-ui
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - proxy-server
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    driver: bridge
+
+volumes:
+  mongo_data:
