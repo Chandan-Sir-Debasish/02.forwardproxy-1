@@ -1,0 +1,189 @@
+{
+	"info": {
+		"_postman_id": "8bfa5dc7-2b36-474c-b016-568b6b1587d5",
+		"name": "Forward Proxy Lab API",
+		"description": "Collection of API endpoints for checking and updating blocklist rules, reading access logs, getting proxy stats, and testing target URLs through the forward proxy.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Blocklist",
+			"item": [
+				{
+					"name": "Get Blocklist Rules",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/blocklist",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"blocklist"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Domain to Blocklist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"domain\": \"badsite.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/blocklist",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"blocklist"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Domain from Blocklist",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/blocklist/{{ruleId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"blocklist",
+								"{{ruleId}}"
+							]
+						},
+						"description": "Replace `{{ruleId}}` with the MongoDB ObjectId of the blocklist rule you want to delete."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Logs & Statistics",
+			"item": [
+				{
+					"name": "Get Proxy Logs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/logs?limit=50",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"logs"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Proxy Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stats",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stats"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Proxy Validation",
+			"item": [
+				{
+					"name": "Test URL via Proxy (Allowed)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"url\": \"https://httpbin.org/ip\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-proxy",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"test-proxy"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Test URL via Proxy (Blocked)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"url\": \"https://badsite.com/index.html\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/test-proxy",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"test-proxy"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

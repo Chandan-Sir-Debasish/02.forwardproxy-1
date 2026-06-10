@@ -87,73 +87,11 @@ function App() {
           </strong>
         </p>
       </div>
-      {/* NEW: Test Proxy Area */}
-      <div className="card">
-        <h2>Test Forward Proxy</h2>
-        <p>
-          Enter a URL to fetch through the proxy. This will use the same proxy
-          rules (blocklist).
-        </p>
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-          <input
-            type="text"
-            value={testUrl}
-            onChange={(e) => setTestUrl(e.target.value)}
-            placeholder="https://example.com"
-            style={{ flex: 1 }}
-          />
-          <button onClick={testProxy} disabled={testLoading}>
-            {testLoading ? "Fetching..." : "Test via Proxy"}
-          </button>
-        </div>
-        {testResult && (
-          <div
-            style={{
-              background: "#f8fafc",
-              padding: "1rem",
-              borderRadius: "0.5rem",
-              fontFamily: "monospace",
-              fontSize: "0.875rem",
-            }}
-          >
-            {testResult.success ? (
-              <>
-                <p>
-                  <strong>Status Code:</strong> {testResult.statusCode}
-                </p>
-                <p>
-                  <strong>Headers:</strong>
-                </p>
-                <pre style={{ overflow: "auto", maxHeight: "150px" }}>
-                  {JSON.stringify(testResult.headers, null, 2)}
-                </pre>
-                <p>
-                  <strong>Content Preview:</strong>
-                </p>
-                <pre
-                  style={{
-                    overflow: "auto",
-                    maxHeight: "200px",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {testResult.preview}
-                </pre>
-              </>
-            ) : (
-              <p style={{ color: "red" }}>
-                <strong>Error:</strong> {testResult.error}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-      // Inside the JSX, after the stats card:
+      {/* Test Proxy Area */}
       <div className="card">
         <h2>Test URL Through Proxy</h2>
         <p>
-          Enter any URL. If the domain is blacklisted, you'll see a block
-          message. Otherwise, the response preview will be shown.
+          Enter a URL to fetch through the forward proxy. If the domain is in the blocklist, the request will be blocked.
         </p>
         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
           <input
@@ -176,6 +114,7 @@ function App() {
               fontFamily: "monospace",
               fontSize: "0.875rem",
               overflow: "auto",
+              border: "1px solid #e2e8f0",
             }}
           >
             {testResult.blocked ? (
@@ -185,25 +124,36 @@ function App() {
             ) : testResult.success ? (
               <>
                 <p>
-                  <strong>Status:</strong> {testResult.statusCode}
+                  <strong>Status Code:</strong> <span style={{ color: testResult.statusCode >= 200 && testResult.statusCode < 300 ? "#10b981" : "#d97706" }}>{testResult.statusCode}</span>
                 </p>
                 <p>
-                  <strong>Response preview:</strong>
+                  <strong>Headers:</strong>
+                </p>
+                <pre style={{ overflow: "auto", maxHeight: "150px", background: "#f1f5f9", padding: "0.5rem", borderRadius: "0.25rem" }}>
+                  {JSON.stringify(testResult.headers, null, 2)}
+                </pre>
+                <p style={{ marginTop: "1rem" }}>
+                  <strong>Response Preview:</strong>
                 </p>
                 <pre
                   style={{
                     whiteSpace: "pre-wrap",
                     maxHeight: "300px",
                     overflow: "auto",
+                    background: "#f1f5f9",
+                    padding: "0.5rem",
+                    borderRadius: "0.25rem",
                   }}
                 >
-                  {testResult.contentPreview}
+                  {testResult.contentPreview || testResult.preview}
                 </pre>
-                <p>
-                  <small>
-                    Total length: {testResult.fullLength} characters
-                  </small>
-                </p>
+                {testResult.fullLength !== undefined && (
+                  <p style={{ marginTop: "0.5rem" }}>
+                    <small style={{ color: "#64748b" }}>
+                      Total length: {testResult.fullLength} characters
+                    </small>
+                  </p>
+                )}
               </>
             ) : (
               <p style={{ color: "#dc2626" }}>

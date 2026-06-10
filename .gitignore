@@ -1,0 +1,33 @@
+# Ignore all Markdown files by default
+*.md
+
+# Exclude README.md from being ignored (allow only README.md)
+!README.md
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+*.tar
+
+# OS / IDE / Environment
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.env

@@ -10,6 +10,7 @@ services:
 
   proxy-server:
     build: ./backend
+    image: js55998/proxy-server
     container_name: proxy-server
     restart: unless-stopped
     ports:
@@ -27,6 +28,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: js55998/proxy-ui
     container_name: proxy-ui
     restart: unless-stopped
     ports:

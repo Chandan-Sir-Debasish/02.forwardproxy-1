@@ -5,6 +5,7 @@ const httpProxy = require("http-proxy");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const helmet = require("helmet");
+const net = require("net");
 
 dotenv.config();
 
@@ -71,46 +72,6 @@ app.get("/api/stats", async (req, res) => {
   res.json({ success: true, data: { total, blocked } });
 });
 
-app.post("/api/test-proxy", express.json(), async (req, res) => {
-  const { url } = req.body;
-  if (!url) return res.status(400).json({ error: "URL required" });
-
-  const http = require("http");
-  const https = require("https");
-
-  const proxyUrl = new URL(url);
-  const protocol = proxyUrl.protocol === "https:" ? https : http;
-
-  const options = {
-    hostname: proxyUrl.hostname,
-    port: proxyUrl.port || (proxyUrl.protocol === "https:" ? 443 : 80),
-    path: proxyUrl.pathname + proxyUrl.search,
-    method: "GET",
-    headers: {
-      "User-Agent": "ForwardProxyTester/1.0",
-    },
-  };
-
-  const proxyReq = protocol.request(options, (proxyRes) => {
-    let data = "";
-    proxyRes.on("data", (chunk) => (data += chunk));
-    proxyRes.on("end", () => {
-      res.json({
-        success: true,
-        statusCode: proxyRes.statusCode,
-        headers: proxyRes.headers,
-        preview: data.slice(0, 500) + (data.length > 500 ? "..." : ""),
-      });
-    });
-  });
-
-  proxyReq.on("error", (err) => {
-    res.status(500).json({ success: false, error: err.message });
-  });
-
-  proxyReq.end();
-});
-
 async function isDomainBlocked(hostname) {
   if (process.env.BLOCKLIST_ENABLED !== "true") return false;
   const rules = await BlocklistRule.find();
@@ -118,13 +79,15 @@ async function isDomainBlocked(hostname) {
 }
 
 // Test proxy endpoint – respects blocklist and uses the forward proxy internally
-app.post("/api/test-proxy", express.json(), async (req, res) => {
+app.post("/api/test-proxy", async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: "URL required" });
 
   let hostname = "";
+  let targetUrl;
   try {
-    hostname = new URL(url).hostname;
+    targetUrl = new URL(url);
+    hostname = targetUrl.hostname;
   } catch (e) {
     return res.status(400).json({ error: "Invalid URL" });
   }
@@ -137,7 +100,7 @@ app.post("/api/test-proxy", express.json(), async (req, res) => {
       method: "TEST",
       url,
       statusCode: 403,
-      clientIp: req.ip,
+      clientIp: req.headers["x-forwarded-for"] || req.socket.remoteAddress || req.ip,
       blocked: true,
     });
     return res.json({
@@ -149,14 +112,11 @@ app.post("/api/test-proxy", express.json(), async (req, res) => {
 
   // 2. If not blocked, fetch through the forward proxy (localhost:8888)
   const http = require("http");
-  const https = require("https");
-  const targetUrl = new URL(url);
-  const protocol = targetUrl.protocol === "https:" ? https : http;
 
   const proxyOptions = {
-    hostname: "localhost",
-    port: 8888, // forward proxy port
-    path: targetUrl.toString(),
+    hostname: "127.0.0.1",
+    port: process.env.PROXY_PORT || 8888, // forward proxy port
+    path: targetUrl.href,
     method: "GET",
     headers: {
       "User-Agent": "ForwardProxyTest/1.0",
@@ -164,7 +124,7 @@ app.post("/api/test-proxy", express.json(), async (req, res) => {
     },
   };
 
-  const proxyReq = protocol.request(proxyOptions, (proxyRes) => {
+  const proxyReq = http.request(proxyOptions, (proxyRes) => {
     let data = "";
     proxyRes.on("data", (chunk) => (data += chunk));
     proxyRes.on("end", async () => {
@@ -173,7 +133,7 @@ app.post("/api/test-proxy", express.json(), async (req, res) => {
         method: "TEST",
         url,
         statusCode: proxyRes.statusCode,
-        clientIp: req.ip,
+        clientIp: req.headers["x-forwarded-for"] || req.socket.remoteAddress || req.ip,
         blocked: false,
       });
       res.json({
@@ -181,6 +141,7 @@ app.post("/api/test-proxy", express.json(), async (req, res) => {
         statusCode: proxyRes.statusCode,
         headers: proxyRes.headers,
         contentPreview: data.slice(0, 2000) + (data.length > 2000 ? "..." : ""),
+        preview: data.slice(0, 2000) + (data.length > 2000 ? "..." : ""),
         fullLength: data.length,
       });
     });
@@ -191,7 +152,7 @@ app.post("/api/test-proxy", express.json(), async (req, res) => {
       method: "TEST",
       url,
       statusCode: 502,
-      clientIp: req.ip,
+      clientIp: req.headers["x-forwarded-for"] || req.socket.remoteAddress || req.ip,
       blocked: false,
     });
     res.status(502).json({ success: false, error: err.message });
@@ -207,23 +168,13 @@ const proxyServer = http.createServer(async (req, res) => {
   let url = req.url;
   let method = req.method;
 
-  // Handle CONNECT method for HTTPS
-  if (req.method === "CONNECT") {
-    const [host, port] = req.url.split(":");
-    const targetUrl = `${host}:${port || 443}`;
-    proxy.web(req, res, {
-      target: `https://${targetUrl}`,
-      agent: false,
-      changeOrigin: true,
-    });
-    return;
-  }
-
-  // Extract hostname for blocking
+  // Extract hostname and target details
   let hostname = "";
+  let targetUrlObj = null;
   try {
-    const urlObj = new URL(url);
-    hostname = urlObj.hostname;
+    const base = req.headers.host ? `http://${req.headers.host}` : "http://localhost";
+    targetUrlObj = new URL(url, base);
+    hostname = targetUrlObj.hostname;
   } catch (e) {
     hostname = req.headers.host || "";
   }
@@ -248,11 +199,18 @@ const proxyServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // Rewrite req.url and target for http-proxy compatibility
+  let targetBase = url;
+  if (targetUrlObj) {
+    targetBase = `${targetUrlObj.protocol}//${targetUrlObj.host}`;
+    req.url = targetUrlObj.pathname + targetUrlObj.search;
+  }
+
   // Forward request
   proxy.web(
     req,
     res,
-    { target: url, changeOrigin: true, followRedirects: true },
+    { target: targetBase, changeOrigin: true, followRedirects: true },
     async (err) => {
       if (err) {
         await ProxyLog.create({
@@ -279,6 +237,62 @@ const proxyServer = http.createServer(async (req, res) => {
         blocked: false,
       });
     }
+  });
+});
+
+// Handle HTTPS CONNECT tunnel requests
+proxyServer.on("connect", async (req, clientSocket, head) => {
+  const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+  const [host, port] = req.url.split(":");
+  const targetPort = parseInt(port || 443, 10);
+
+  // Check blocklist
+  let blocked = false;
+  if (process.env.BLOCKLIST_ENABLED === "true") {
+    const blockRules = await BlocklistRule.find();
+    blocked = blockRules.some((rule) => host.includes(rule.domain));
+  }
+
+  if (blocked) {
+    await ProxyLog.create({
+      method: "CONNECT",
+      url: req.url,
+      statusCode: 403,
+      clientIp,
+      blocked: true,
+    });
+    clientSocket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+    clientSocket.end();
+    return;
+  }
+
+  // Establish TCP tunnel
+  const serverSocket = net.connect(targetPort, host, async () => {
+    await ProxyLog.create({
+      method: "CONNECT",
+      url: req.url,
+      statusCode: 200,
+      clientIp,
+      blocked: false,
+    });
+
+    clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+    serverSocket.write(head);
+    serverSocket.pipe(clientSocket);
+    clientSocket.pipe(serverSocket);
+  });
+
+  serverSocket.on("error", async (err) => {
+    console.error("Proxy CONNECT target socket error:", err.message);
+    if (!clientSocket.destroyed) {
+      clientSocket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+      clientSocket.end();
+    }
+  });
+
+  clientSocket.on("error", (err) => {
+    console.error("Proxy CONNECT client socket error:", err.message);
+    serverSocket.end();
   });
 });
 
