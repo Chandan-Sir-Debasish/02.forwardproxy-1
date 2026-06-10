@@ -3,6 +3,8 @@
 
 # Exclude README.md from being ignored (allow only README.md)
 !README.md
+!forward_proxy_tutorial.md
+!test_cases_and_scenarios.md
 
 # Node.js
 node_modules/
